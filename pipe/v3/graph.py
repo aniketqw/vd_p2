@@ -35,6 +35,8 @@ build_graph(llm, rag_store, mc_stats) → CompiledGraph
 CompiledGraph.run(state)     → AnalysisState
 """
 
+import json
+import re
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Optional
 
@@ -49,7 +51,7 @@ from .tools import (
     query_confusion_count,
 )
 from .embeddings import extract_embedding
-from .schemas import Turn2Analysis, get_turn2_parser
+from .schemas import Turn2Analysis, get_turn2_parser, TURN2_EXAMPLE_FORMAT
 
 import sys
 from pathlib import Path
@@ -85,6 +87,73 @@ class AnalysisState:
 
     # error tracking
     error:            Optional[str]        = None
+
+
+# ── JSON extraction helper ────────────────────────────────────────────────────
+
+def _parse_turn2(text: str, dist_type: str) -> Optional[Turn2Analysis]:
+    """
+    Try multiple strategies to extract a Turn2Analysis from raw LLM text.
+    1. Direct JSON parse of the whole response
+    2. Extract first {...} block via regex (handles prose + JSON)
+    3. Validate extracted dict with Pydantic
+    Returns None if all strategies fail (raw text kept in hypothesis_text).
+    """
+    required_keys = {"shared_failure_pattern", "typical_vs_outlier",
+                     "what_misled_the_model", "confidence_assessment", "root_cause"}
+
+    def _try_build(d: dict) -> Optional[Turn2Analysis]:
+        if not required_keys.issubset(d.keys()):
+            return None
+        try:
+            return Turn2Analysis(**{k: d[k] for k in Turn2Analysis.model_fields if k in d})
+        except Exception:
+            return None
+
+    # Strategy 1: whole text is JSON
+    try:
+        d = json.loads(text)
+        result = _try_build(d)
+        if result:
+            logger.info(f"  [graph:hypothesise] Pydantic parse succeeded (strategy 1).")
+            return result
+    except Exception:
+        pass
+
+    # Strategy 2: pull out the largest {...} block
+    try:
+        match = re.search(r"\{[^{}]*\}", text, re.DOTALL)
+        if match:
+            d = json.loads(match.group())
+            result = _try_build(d)
+            if result:
+                logger.info(f"  [graph:hypothesise] Pydantic parse succeeded (strategy 2).")
+                return result
+    except Exception:
+        pass
+
+    # Strategy 3: greedy — find outermost { ... } allowing nested braces
+    try:
+        start = text.index("{")
+        depth, end = 0, start
+        for i, ch in enumerate(text[start:], start):
+            if ch == "{":
+                depth += 1
+            elif ch == "}":
+                depth -= 1
+                if depth == 0:
+                    end = i
+                    break
+        d = json.loads(text[start:end + 1])
+        result = _try_build(d)
+        if result:
+            logger.info(f"  [graph:hypothesise] Pydantic parse succeeded (strategy 3).")
+            return result
+    except Exception:
+        pass
+
+    logger.warning(f"  [graph:hypothesise] All parse strategies failed for {dist_type} — keeping raw text.")
+    return None
 
 
 # ── nodes ──────────────────────────────────────────────────────────────────────
@@ -142,13 +211,9 @@ def hypothesise_node(
         except Exception as exc:
             logger.warning(f"  [graph:hypothesise] RAG retrieval failed: {exc}")
 
-    # Get structured output format instructions
-    try:
-        turn2_parser      = get_turn2_parser()
-        format_instructions = turn2_parser.get_format_instructions()
-    except Exception:
-        turn2_parser        = None
-        format_instructions = ""
+    # Use example-based format instructions — smaller models echo JSON Schema back
+    # instead of filling it in, so we give a concrete filled-in example instead.
+    format_instructions = TURN2_EXAMPLE_FORMAT
 
     try:
         msgs = build_turn2_message(
@@ -162,16 +227,8 @@ def hypothesise_node(
         raw_response = (llm | StrOutputParser()).invoke(msgs).strip()
         state.hypothesis_text = raw_response
 
-        # Attempt Pydantic parsing
-        if turn2_parser is not None:
-            try:
-                state.structured_output = turn2_parser.parse(raw_response)
-                logger.info(f"  [graph:hypothesise] Pydantic parse succeeded.")
-            except Exception as parse_exc:
-                logger.warning(
-                    f"  [graph:hypothesise] Pydantic parse failed "
-                    f"({parse_exc}) — keeping raw text."
-                )
+        # Try to parse structured output with multiple fallback strategies
+        state.structured_output = _parse_turn2(raw_response, state.dist_type)
 
     except Exception as exc:
         state.error = f"hypothesise_node failed: {exc}"

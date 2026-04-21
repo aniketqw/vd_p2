@@ -179,7 +179,7 @@ python3 unified_pipeline.py --only-stage b \
 --seed N            # Random seed (default: 42)
 --no-tool-trace     # Hide tool verification results from V3 report
 --vlm-port PORT     # Override VLM server port for Stage A (default: 11434 Ollama)
---vlm-model NAME    # Override VLM model for Stage A (default: llava-llama3)
+--vlm-model NAME    # Override VLM model for Stage A (default: llava)
 ```
 
 ### Stage B / Debugger Flags
@@ -299,9 +299,9 @@ source venv_vision/bin/activate
 brew install ollama
 ollama serve          # starts on port 11434
 
-# Pull models (~7 GB total, one-time)
-ollama pull llava-llama3   # Stage A: vision analysis  (~5 GB)
-ollama pull llama3.2:3b    # Stage B: code debugging   (~2 GB)
+# Pull models (one-time)
+ollama pull llava      # Stage A: vision analysis  (~4.7 GB)
+ollama pull qwen2.5    # Stage B: code debugging   (~4.7 GB)
 ```
 
 Stage A auto-detects Ollama on port 11434. Fallback chain: **11434 → 8000 (vLLM) → 8081 → skip VLM**.

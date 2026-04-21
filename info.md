@@ -421,8 +421,8 @@ The generated `ai_reasoning_summary_v3.md` contains:
 
 ```bash
 brew install ollama && ollama serve
-ollama pull llava-llama3   # Stage A vision model (~5 GB)
-ollama pull llama3.2:3b    # Stage B code model  (~2 GB)
+ollama pull llava      # Stage A vision model (~4.7 GB)
+ollama pull qwen2.5    # Stage B code model  (~4.7 GB)
 ```
 
 | Model | Stage | RAM | Ollama tag |
@@ -437,7 +437,7 @@ Uses `ChatOpenAI` (LangChain) via OpenAI-compatible API. Auto-tries three server
 
 | Priority | Server | Port | Model | Condition |
 |----------|--------|------|-------|-----------|
-| 1st | Ollama (M3 default) | 11434 | `llava-llama3` | always tried first |
+| 1st | Ollama (M3 default) | 11434 | `llava` | always tried first |
 | 2nd | vLLM (GPU server) | 8000 | `Qwen/Qwen2.5-VL-7B-Instruct` | if 11434 not ready |
 | 3rd | Port 8081 (any OpenAI-compat) | 8081 | `llava` | if 8000 not ready |
 | fallback | — | — | — | skip VLM, stats-only |
@@ -449,7 +449,7 @@ Override with `--vlm-port` / `--vlm-model` flags.
 
 | Provider | Format | Default Port | Default Model | How to activate |
 |----------|--------|-------------|--------------|-----------------|
-| `LOCAL` (Ollama) | `/api/generate` | 11434 | `llama3.2:3b` | default |
+| `LOCAL` (Ollama) | `/api/generate` → `/v1` fallback | 11434 | `qwen2.5` | default |
 | `LOCAL_OPENAI` | `/v1/chat/completions` | configurable | `gpt-3.5-turbo` | `--local-llm-format openai` |
 | `GROQ` | Groq cloud API | — | `mixtral-8x7b-32768` | `--groq-api-key KEY` |
 | port 8081 (last resort) | `/v1/chat/completions` | 8081 | `gpt-3.5-turbo` | auto when others unavailable |

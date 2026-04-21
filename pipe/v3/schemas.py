@@ -99,6 +99,18 @@ class RecommendationList(BaseModel):
 
 # ── Parser factories ───────────────────────────────────────────────────────────
 
+TURN2_EXAMPLE_FORMAT = """\
+Respond ONLY with a valid JSON object — no text before or after. Fill in your analysis:
+{
+  "shared_failure_pattern": "describe the visual artifact present in ALL images that most directly explains the wrong prediction",
+  "typical_vs_outlier": "compare how typical (centroid) vs outlier images fail — same mechanism or different?",
+  "what_misled_the_model": "the exact degraded region or artifact pattern that activated the wrong class",
+  "confidence_assessment": "whether the distortion looks obvious or subtle at 32x32 resolution and why",
+  "root_cause": "ONE sentence only: the single core mechanism by which this distortion type triggers the wrong-class prediction",
+  "rag_novel_pattern": "whether this matches a known historical failure pattern or is a new pattern (optional)"
+}"""
+
+
 def get_turn2_parser():
     """Return a PydanticOutputParser for Turn2Analysis."""
     from langchain_core.output_parsers import PydanticOutputParser

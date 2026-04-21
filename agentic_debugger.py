@@ -253,7 +253,7 @@ class LLMClient:
             raise ValueError(f"Unknown provider: {p}")
 
     def _call_ollama(self, prompt: str, model: str = "mistral") -> str:
-        """Call local Ollama instance."""
+        """Call local Ollama instance. Falls back to /v1/chat/completions if /api/generate 404s."""
         try:
             import requests
         except ImportError:
@@ -265,8 +265,13 @@ class LLMClient:
                 json={"model": model, "prompt": prompt, "stream": False},
                 timeout=120,
             )
+            if response.status_code == 404:
+                # Ollama /api/generate 404 — try OpenAI-compat endpoint at same port
+                return self._call_openai_local(prompt, model)
             response.raise_for_status()
             return response.json().get("response", "")
+        except RuntimeError:
+            raise
         except Exception as e:
             raise RuntimeError(f"Ollama call failed: {e}")
 
@@ -400,7 +405,7 @@ Format your response as JSON:
 """
 
     try:
-        response = llm.call(prompt, provider=LLMProvider.LOCAL)  # Use local for code analysis
+        response = llm.call(prompt)  # AUTO: Groq → LOCAL_OPENAI → LOCAL → port 8081
         result = json.loads(response)
     except Exception as e:
         print(f"⚠️  LLM analysis failed: {e}. Using fallback heuristics.")
@@ -479,10 +484,10 @@ Provide your diagnosis as JSON:
 """
 
     try:
-        response = llm.call(prompt, provider=LLMProvider.GROQ)  # Use Groq for expert diagnosis
+        response = llm.call(prompt)  # AUTO: Groq → LOCAL_OPENAI → LOCAL → port 8081
         result = json.loads(response)
     except Exception as e:
-        print(f"⚠️  Groq diagnosis failed: {e}. Using heuristic diagnosis.")
+        print(f"⚠️  Diagnosis LLM failed: {e}. Using heuristic diagnosis.")
         result = {
             "root_causes": [
                 {
@@ -538,7 +543,7 @@ Include a comment block explaining what was changed and why.
 """
 
     try:
-        response = llm.call(prompt, provider=LLMProvider.GROQ)
+        response = llm.call(prompt)  # AUTO: Groq → LOCAL_OPENAI → LOCAL → port 8081
 
         # Extract code block
         code_match = re.search(r"```python\n(.*?)\n```", response, re.DOTALL)
@@ -605,11 +610,13 @@ def run_fixed_code(fixed_code: FixedCode, original_code_path: Path, logs_dir: Pa
         )
 
         if result.returncode != 0:
+            stderr_tail = result.stderr[-800:].strip() if result.stderr else "(no stderr)"
+            print(f"  ❌ stderr:\n{stderr_tail}")
             return ExecutionResult(
                 success=False,
                 training_log_path=None,
                 error_message=f"Process exited with code {result.returncode}",
-                stderr_output=result.stderr[-500:]  # Last 500 chars of stderr
+                stderr_output=stderr_tail,
             )
 
         # Find the generated training log
