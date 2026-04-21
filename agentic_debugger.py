@@ -54,9 +54,10 @@ except ImportError:
 
 class LLMProvider(Enum):
     """LLM provider selection."""
-    LOCAL = "local"      # Ollama (localhost:11434)
-    GROQ = "groq"        # Groq API
-    AUTO = "auto"        # Use Groq if available, fallback to local
+    LOCAL        = "local"        # Ollama (localhost:11434)
+    LOCAL_OPENAI = "local_openai" # OpenAI-compatible local server (e.g. port 8081)
+    GROQ         = "groq"         # Groq API
+    AUTO         = "auto"         # Prefers GROQ → LOCAL_OPENAI → LOCAL
 
 
 @dataclass
@@ -160,11 +161,13 @@ class LLMClient:
         groq_api_key: Optional[str] = None,
         groq_rate_limit_per_min: int = 100,
         preferred_provider: LLMProvider = LLMProvider.AUTO,
+        local_api_format: str = "ollama",  # "ollama" | "openai"
     ):
         self.local_port = local_port
         self.groq_api_key = groq_api_key
         self.groq_rate_limit = groq_rate_limit_per_min
         self.preferred_provider = preferred_provider
+        self.local_api_format = local_api_format
         self.groq_requests_this_minute = 0
         self.groq_last_minute_start = datetime.now()
 
@@ -178,21 +181,32 @@ class LLMClient:
         except Exception:
             return False
 
+    def is_openai_local_available(self) -> bool:
+        """Check if an OpenAI-compatible local server is up at the configured port."""
+        import urllib.request
+        try:
+            url = f"http://localhost:{self.local_port}/v1/models"
+            with urllib.request.urlopen(url, timeout=3) as resp:
+                return resp.status == 200
+        except Exception:
+            return False
+
     def is_groq_available(self) -> bool:
         """Check if Groq API is configured."""
         return bool(self.groq_api_key) and REQUESTS_AVAILABLE
 
     def _get_best_provider(self) -> LLMProvider:
-        """Select best available provider."""
+        """Select best available provider. Priority: GROQ → LOCAL_OPENAI → LOCAL."""
         if self.preferred_provider != LLMProvider.AUTO:
             return self.preferred_provider
 
         if self.is_groq_available() and self._groq_rate_available():
             return LLMProvider.GROQ
-        elif self.is_local_available():
+        if self.local_api_format == "openai" and self.is_openai_local_available():
+            return LLMProvider.LOCAL_OPENAI
+        if self.is_local_available():
             return LLMProvider.LOCAL
-        else:
-            raise RuntimeError("No LLM provider available (Ollama not running, Groq not configured)")
+        raise RuntimeError("No LLM provider available (Ollama not running, Groq not configured)")
 
     def _groq_rate_available(self) -> bool:
         """Check if Groq rate limit allows another request."""
@@ -207,14 +221,20 @@ class LLMClient:
 
     def call(self, prompt: str, provider: Optional[LLMProvider] = None, model: Optional[str] = None) -> str:
         """Call LLM with auto-selection or specified provider."""
-        provider = provider or self._get_best_provider()
+        p = provider or self._get_best_provider()
 
-        if provider == LLMProvider.LOCAL:
+        # When local_api_format="openai", redirect LOCAL calls to LOCAL_OPENAI
+        if p == LLMProvider.LOCAL and self.local_api_format == "openai":
+            p = LLMProvider.LOCAL_OPENAI
+
+        if p == LLMProvider.LOCAL_OPENAI:
+            return self._call_openai_local(prompt, model or "gpt-3.5-turbo")
+        elif p == LLMProvider.LOCAL:
             return self._call_ollama(prompt, model or "mistral")
-        elif provider == LLMProvider.GROQ:
+        elif p == LLMProvider.GROQ:
             return self._call_groq(prompt, model or "mixtral-8x7b-32768")
         else:
-            raise ValueError(f"Unknown provider: {provider}")
+            raise ValueError(f"Unknown provider: {p}")
 
     def _call_ollama(self, prompt: str, model: str = "mistral") -> str:
         """Call local Ollama instance."""
@@ -233,6 +253,28 @@ class LLMClient:
             return response.json().get("response", "")
         except Exception as e:
             raise RuntimeError(f"Ollama call failed: {e}")
+
+    def _call_openai_local(self, prompt: str, model: str = "gpt-3.5-turbo") -> str:
+        """POST to a local OpenAI-compatible /v1/chat/completions endpoint."""
+        import json as _json
+        import urllib.request
+        url     = f"http://localhost:{self.local_port}/v1/chat/completions"
+        payload = _json.dumps({
+            "model":      model,
+            "messages":   [{"role": "user", "content": prompt}],
+            "max_tokens": 2000,
+            "stream":     False,
+        }).encode()
+        req = urllib.request.Request(
+            url, data=payload,
+            headers={"Content-Type": "application/json"},
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=180) as resp:
+                data = _json.loads(resp.read())
+                return data["choices"][0]["message"]["content"].strip()
+        except Exception as e:
+            raise RuntimeError(f"OpenAI-local call failed: {e}")
 
     def _call_groq(self, prompt: str, model: str = "mixtral-8x7b-32768") -> str:
         """Call Groq API."""

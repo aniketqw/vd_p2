@@ -19,31 +19,37 @@ from logger_setup import logger
 
 def wait_for_server(port: int, timeout: int = 300, poll_interval: int = 5) -> bool:
     """
-    Poll http://localhost:{port}/health until HTTP 200 or timeout.
+    Poll http://localhost:{port} until HTTP 200 or timeout.
+    Tries /health first (vLLM), then /v1/models (standard OpenAI-compatible servers).
     Prints a live countdown. Returns True if ready, False if timed out.
     """
-    url      = f"http://localhost:{port}/health"
+    candidates = [
+        f"http://localhost:{port}/health",    # vLLM
+        f"http://localhost:{port}/v1/models", # standard OpenAI-compatible servers
+    ]
     deadline = time.time() + timeout
     attempt  = 0
 
-    print(f"\n⏳ Waiting for vLLM server on port {port} (timeout={timeout}s)…")
+    print(f"\n⏳ Waiting for server on port {port} (timeout={timeout}s)…")
     while time.time() < deadline:
         attempt += 1
-        try:
-            with urllib.request.urlopen(url, timeout=3) as resp:
-                if resp.status == 200:
-                    print(f"✅ Server ready (after ~{attempt * poll_interval}s)\n")
-                    logger.info("vLLM server is ready.")
-                    return True
-        except Exception:
-            remaining = int(deadline - time.time())
-            print(
-                f"   not ready yet — retrying in {poll_interval}s "
-                f"(~{remaining}s remaining) …",
-                end="\r", flush=True,
-            )
-            time.sleep(poll_interval)
+        for url in candidates:
+            try:
+                with urllib.request.urlopen(url, timeout=3) as resp:
+                    if resp.status == 200:
+                        print(f"✅ Server ready (after ~{attempt * poll_interval}s)\n")
+                        logger.info("Server is ready.")
+                        return True
+            except Exception:
+                continue
+        remaining = int(deadline - time.time())
+        print(
+            f"   not ready yet — retrying in {poll_interval}s "
+            f"(~{remaining}s remaining) …",
+            end="\r", flush=True,
+        )
+        time.sleep(poll_interval)
 
     print(f"\n❌ Server did not become ready within {timeout}s.")
-    logger.error("vLLM server readiness timeout.")
+    logger.error("Server readiness timeout.")
     return False

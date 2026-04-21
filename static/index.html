@@ -1,0 +1,591 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Vision Pipeline</title>
+    <!-- Google Fonts: Inter -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Marked.js for Markdown rendering -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <style>
+        :root {
+            --bg-color: #0f111a;
+            --glass-bg: rgba(255, 255, 255, 0.03);
+            --glass-border: rgba(255, 255, 255, 0.08);
+            --primary: #6366f1;
+            --primary-hover: #4f46e5;
+            --text-main: #f3f4f6;
+            --text-muted: #9ca3af;
+            --terminal-bg: #000000;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: var(--bg-color);
+            background-image: 
+                radial-gradient(circle at 15% 50%, rgba(99, 102, 241, 0.15) 0%, transparent 50%),
+                radial-gradient(circle at 85% 30%, rgba(168, 85, 247, 0.15) 0%, transparent 50%);
+            background-attachment: fixed;
+            color: var(--text-main);
+            font-family: 'Inter', sans-serif;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem;
+            display: grid;
+            grid-template-columns: 350px 1fr;
+            gap: 2rem;
+        }
+
+        @media (max-width: 900px) {
+            .container {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        header {
+            margin-bottom: 2rem;
+            grid-column: 1 / -1;
+            text-align: center;
+        }
+
+        header h1 {
+            font-size: 2.5rem;
+            font-weight: 700;
+            background: linear-gradient(to right, #818cf8, #c084fc);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin: 0 0 0.5rem 0;
+        }
+
+        header p {
+            color: var(--text-muted);
+            margin: 0;
+            font-size: 1.1rem;
+        }
+
+        .glass-panel {
+            background: var(--glass-bg);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid var(--glass-border);
+            border-radius: 16px;
+            padding: 1.5rem;
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .glass-panel:hover {
+            box-shadow: 0 12px 48px 0 rgba(0, 0, 0, 0.4);
+            border-color: rgba(255, 255, 255, 0.12);
+        }
+
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 500;
+            font-size: 0.9rem;
+            color: var(--text-muted);
+        }
+
+        .form-control {
+            width: 100%;
+            padding: 0.75rem 1rem;
+            background: rgba(0, 0, 0, 0.2);
+            border: 1px solid var(--glass-border);
+            border-radius: 8px;
+            color: white;
+            font-family: inherit;
+            font-size: 0.95rem;
+            box-sizing: border-box;
+            outline: none;
+            transition: border-color 0.2s ease;
+        }
+
+        .form-control:focus {
+            border-color: var(--primary);
+        }
+
+        .checkbox-group {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-bottom: 1rem;
+        }
+
+        .checkbox-group input[type="checkbox"] {
+            accent-color: var(--primary);
+            width: 1.2rem;
+            height: 1.2rem;
+            cursor: pointer;
+        }
+
+        .checkbox-group label {
+            margin-bottom: 0;
+            cursor: pointer;
+        }
+
+        .btn {
+            width: 100%;
+            padding: 0.8rem 1rem;
+            border: none;
+            border-radius: 8px;
+            font-family: inherit;
+            font-weight: 600;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--primary), var(--primary-hover));
+            color: white;
+            box-shadow: 0 4px 12px rgba(99, 102, 241, 0.25);
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(99, 102, 241, 0.4);
+        }
+
+        .btn-secondary {
+            background: rgba(255, 255, 255, 0.05);
+            color: white;
+            border: 1px solid var(--glass-border);
+        }
+
+        .btn-secondary:hover {
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none !important;
+        }
+
+        /* Terminal Style */
+        .terminal-container {
+            display: flex;
+            flex-direction: column;
+            height: 600px;
+        }
+
+        .terminal-header {
+            background: #1a1b26;
+            padding: 0.75rem 1rem;
+            border-top-left-radius: 12px;
+            border-top-right-radius: 12px;
+            display: flex;
+            gap: 0.5rem;
+            align-items: center;
+            border-bottom: 1px solid #292e42;
+        }
+
+        .mac-btn {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+        }
+        .mac-btn.close { background: #ff5f56; }
+        .mac-btn.minimize { background: #ffbd2e; }
+        .mac-btn.maximize { background: #27c93f; }
+
+        .terminal-title {
+            margin-left: 0.5rem;
+            font-size: 0.85rem;
+            color: #a9b1d6;
+            font-weight: 500;
+        }
+
+        .terminal-body {
+            flex: 1;
+            background: var(--terminal-bg);
+            border-bottom-left-radius: 12px;
+            border-bottom-right-radius: 12px;
+            padding: 1rem;
+            overflow-y: auto;
+            font-family: 'Menlo', 'Monaco', 'Courier New', monospace;
+            font-size: 0.85rem;
+            line-height: 1.5;
+            color: #a9b1d6;
+            scrollbar-width: thin;
+            scrollbar-color: rgba(255,255,255,0.2) transparent;
+        }
+
+        .terminal-body::-webkit-scrollbar {
+            width: 6px;
+        }
+        .terminal-body::-webkit-scrollbar-thumb {
+            background-color: rgba(255,255,255,0.2);
+            border-radius: 10px;
+        }
+
+        /* Reports Section */
+        .reports-container {
+            grid-column: 1 / -1;
+            margin-top: 2rem;
+            display: none;
+        }
+
+        .reports-container.active {
+            display: block;
+        }
+
+        .tabs {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 1rem;
+            border-bottom: 1px solid var(--glass-border);
+            padding-bottom: 0px;
+        }
+
+        .tab {
+            padding: 0.75rem 1.5rem;
+            cursor: pointer;
+            color: var(--text-muted);
+            font-weight: 500;
+            border-bottom: 2px solid transparent;
+            transition: all 0.2s ease;
+            margin-bottom: -1px;
+        }
+
+        .tab:hover {
+            color: white;
+        }
+
+        .tab.active {
+            color: var(--primary);
+            border-bottom-color: var(--primary);
+        }
+
+        .tab-content {
+            display: none;
+            padding: 1.5rem;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 12px;
+            border: 1px solid var(--glass-border);
+            max-height: 600px;
+            overflow-y: auto;
+            line-height: 1.6;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        /* Markdown Overrides */
+        .markdown-body h1, .markdown-body h2, .markdown-body h3 {
+            border-bottom: 1px solid var(--glass-border);
+            padding-bottom: 0.3em;
+            margin-top: 1.5em;
+        }
+        .markdown-body pre {
+            background: #111;
+            padding: 1rem;
+            border-radius: 8px;
+            overflow-x: auto;
+            border: 1px solid var(--glass-border);
+        }
+        .markdown-body code {
+            font-family: 'Menlo', monospace;
+            background: rgba(255,255,255,0.1);
+            padding: 0.2em 0.4em;
+            border-radius: 4px;
+            font-size: 0.85em;
+        }
+        .markdown-body pre code {
+            background: transparent;
+            padding: 0;
+        }
+
+        .status-indicator {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background-color: #9ca3af;
+            margin-right: 8px;
+        }
+        .status-indicator.running { background-color: #eab308; box-shadow: 0 0 8px #eab308; }
+        .status-indicator.success { background-color: #22c55e; box-shadow: 0 0 8px #22c55e; }
+        .status-indicator.error { background-color: #ef4444; box-shadow: 0 0 8px #ef4444; }
+
+        .form-section-title {
+            margin-top: 0;
+            font-size: 1.2rem;
+            margin-bottom: 1rem;
+            color: white;
+            border-bottom: 1px solid var(--glass-border);
+            padding-bottom: 0.5rem;
+        }
+
+        .code-input-container {
+            margin-bottom: 1.5rem;
+        }
+
+        .code-input {
+            width: 100%;
+            height: 150px;
+            background: rgba(0, 0, 0, 0.4);
+            border: 1px solid var(--glass-border);
+            border-radius: 8px;
+            color: #a9b1d6;
+            font-family: 'Menlo', 'Monaco', 'Courier New', monospace;
+            font-size: 0.85rem;
+            padding: 1rem;
+            box-sizing: border-box;
+            resize: vertical;
+            outline: none;
+            transition: border-color 0.2s ease;
+        }
+
+        .code-input:focus {
+            border-color: var(--primary);
+        }
+
+        .badge {
+            background: rgba(99, 102, 241, 0.2);
+            color: #818cf8;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            margin-left: auto;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <header>
+            <h1>AI Vision Pipeline</h1>
+            <p>Automated Model Failure Analysis & Code Correction</p>
+        </header>
+
+        <!-- Controls Side -->
+        <div class="glass-panel">
+            <h2 class="form-section-title">Configuration</h2>
+            
+            <div class="form-group">
+                <label for="groqKey">Groq API Key (Stage B)</label>
+                <input type="password" id="groqKey" class="form-control" placeholder="gsk_..." autocomplete="off">
+            </div>
+
+            <div class="form-group">
+                <label for="ollamaPort">Local LLM Port</label>
+                <input type="text" id="ollamaPort" class="form-control" value="11434">
+            </div>
+
+            <div class="form-group">
+                <label for="localLlmFormat">Local LLM Format</label>
+                <select id="localLlmFormat" class="form-control">
+                    <option value="ollama">Ollama (default, port 11434)</option>
+                    <option value="openai">OpenAI-compatible (e.g. port 8081)</option>
+                </select>
+            </div>
+
+            <h2 class="form-section-title" style="margin-top: 1.5rem;">Target Model</h2>
+            
+            <div class="code-input-container">
+                <label for="userCode" style="display:block; margin-bottom: 0.5rem; font-size: 0.9rem; color: var(--text-muted); font-weight: 500;">Custom PyTorch Code (optional)</label>
+                <textarea id="userCode" class="code-input" placeholder="Paste your PyTorch model code here (or leave blank to use the default SimpleCNN)..."></textarea>
+            </div>
+
+            <h2 class="form-section-title" style="margin-top: 1.5rem;">Pipeline Settings</h2>
+            
+            <div class="checkbox-group">
+                <input type="checkbox" id="noVlm" checked>
+                <label for="noVlm">Skip VLM (Stats-only - Faster) <span class="badge">Recommeded</span></label>
+            </div>
+            
+            <div class="checkbox-group">
+                <input type="checkbox" id="runStageC">
+                <label for="runStageC">Run Stage C (Re-Analysis) after Fix</label>
+            </div>
+
+            <div style="margin-top: 1.5rem;">
+                <button id="btnRunFull" class="btn btn-primary" onclick="runPipeline('full')">
+                    🚀 Run Full Pipeline (A + B)
+                </button>
+                <button id="btnRunStageB" class="btn btn-secondary" onclick="runPipeline('stageB')">
+                    🐞 Run Debug Only (Stage B)
+                </button>
+                <button id="btnRunStageA" class="btn btn-secondary" onclick="runPipeline('stageA')">
+                    📊 Run Analysis Only (Stage A)
+                </button>
+            </div>
+            
+            <div style="margin-top:1rem; font-size: 0.85rem; color: var(--text-muted);">
+                <div style="display:flex; align-items:center;">
+                    <div id="statusDot" class="status-indicator"></div>
+                    <span id="statusText">Ready</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Terminal Side -->
+        <div class="glass-panel terminal-container">
+            <div class="terminal-header">
+                <div class="mac-btn close"></div>
+                <div class="mac-btn minimize"></div>
+                <div class="mac-btn maximize"></div>
+                <div class="terminal-title">Pipeline Output - unified_pipeline.py</div>
+            </div>
+            <div class="terminal-body" id="terminalOutput">
+                <div style="color: #565f89;">$ Ready to start pipeline...</div>
+            </div>
+        </div>
+
+        <!-- Reports Viewer -->
+        <div class="reports-container glass-panel" id="reportsContainer">
+            <h2 class="form-section-title">Final Reports</h2>
+            <div class="tabs">
+                <div class="tab active" onclick="switchTab('tab-pipeline')">Pipeline Report (Stage B)</div>
+                <div class="tab" onclick="switchTab('tab-analysis')">V3 Analysis (Stage A)</div>
+            </div>
+            
+            <div id="tab-pipeline" class="tab-content active markdown-body">
+                Loading...
+            </div>
+            
+            <div id="tab-analysis" class="tab-content markdown-body">
+                Loading...
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let eventSource = null;
+
+        function updateStatus(status, text) {
+            const dot = document.getElementById('statusDot');
+            const statusText = document.getElementById('statusText');
+            
+            dot.className = 'status-indicator ' + status;
+            statusText.innerText = text;
+        }
+
+        function appendToTerminal(text, isError = false) {
+            const terminal = document.getElementById('terminalOutput');
+            const div = document.createElement('div');
+            
+            // Clean up basic ANSI escape codes for colors
+            text = text.replace(/\x1b\[[0-9;]*m/g, ''); 
+            
+            div.innerText = text;
+            if (isError) {
+                div.style.color = '#ff5f56';
+            }
+            terminal.appendChild(div);
+            terminal.scrollTop = terminal.scrollHeight;
+        }
+
+        async function runPipeline(mode) {
+            // Disable buttons
+            document.querySelectorAll('.btn').forEach(btn => btn.disabled = true);
+            document.getElementById('terminalOutput').innerHTML = '<div style="color: #565f89;">$ Starting pipeline...</div>';
+            document.getElementById('reportsContainer').classList.remove('active');
+            updateStatus('running', 'Pipeline Running...');
+
+            const config = {
+                mode: mode,
+                groq_key: document.getElementById('groqKey').value,
+                ollama_port: document.getElementById('ollamaPort').value,
+                no_vlm: document.getElementById('noVlm').checked,
+                stage_c: document.getElementById('runStageC').checked,
+                user_code: document.getElementById('userCode').value,
+                local_llm_format: document.getElementById('localLlmFormat').value
+            };
+
+            try {
+                const response = await fetch('/api/run', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(config)
+                });
+                
+                if (!response.ok) {
+                    throw new Error("Failed to start pipeline");
+                }
+
+                // Connect to Server-Sent Events for live logs
+                if (eventSource) eventSource.close();
+                eventSource = new EventSource('/api/stream');
+                
+                eventSource.onmessage = function(event) {
+                    const data = JSON.parse(event.data);
+                    
+                    if (data.type === 'stdout' || data.type === 'stderr') {
+                        appendToTerminal(data.content, data.type === 'stderr');
+                    } else if (data.type === 'end') {
+                        eventSource.close();
+                        const isSuccess = data.code === 0;
+                        updateStatus(isSuccess ? 'success' : 'error', isSuccess ? 'Pipeline Complete' : 'Pipeline Failed (Code ' + data.code + ')');
+                        document.querySelectorAll('.btn').forEach(btn => btn.disabled = false);
+                        
+                        if (isSuccess) fetchAndRenderReports();
+                    }
+                };
+
+                eventSource.onerror = function() {
+                    console.error("SSE Connection Error");
+                    eventSource.close();
+                    updateStatus('error', 'Connection lost');
+                    document.querySelectorAll('.btn').forEach(btn => btn.disabled = false);
+                };
+
+            } catch (err) {
+                appendToTerminal(`Error: ${err.message}`, true);
+                updateStatus('error', 'Error starting');
+                document.querySelectorAll('.btn').forEach(btn => btn.disabled = false);
+            }
+        }
+
+        async function fetchAndRenderReports() {
+            try {
+                const res = await fetch('/api/reports');
+                const data = await res.json();
+                
+                document.getElementById('reportsContainer').classList.add('active');
+                
+                const pipelineDiv = document.getElementById('tab-pipeline');
+                const analysisDiv = document.getElementById('tab-analysis');
+                
+                pipelineDiv.innerHTML = data.pipeline_report 
+                    ? marked.parse(data.pipeline_report) 
+                    : '<i>No Pipeline Report (master_pipeline_report.md) found. Did you run Stage B?</i>';
+                    
+                analysisDiv.innerHTML = data.analysis_report 
+                    ? marked.parse(data.analysis_report) 
+                    : '<i>No Analysis Report (ai_reasoning_summary_v3.md) found. Did you run Stage A?</i>';
+                    
+            } catch (err) {
+                console.error("Error fetching reports", err);
+            }
+        }
+
+        function switchTab(tabId) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            
+            event.target.classList.add('active');
+            document.getElementById(tabId).classList.add('active');
+        }
+    </script>
+</body>
+</html>

@@ -183,13 +183,24 @@ python3 unified_pipeline.py --only-stage b \
 ### Stage B / Debugger Flags
 
 ```bash
---groq-api-key KEY      # Groq API key (or set $GROQ_API_KEY)
---local-llm-port PORT   # Ollama port (default: 11434)
---groq-rate-limit N     # Max Groq calls/min (default: 100)
---debug-llm-provider    # auto | groq | local
---max-iterations N      # Max fix attempts (default: 3)
---auto-approve          # Skip human review (non-interactive)
---stage-c               # Re-run V3 on fixed code after success
+--groq-api-key KEY          # Groq API key (or set $GROQ_API_KEY)
+--local-llm-port PORT       # Local LLM server port (default: 11434)
+--local-llm-format FORMAT   # API format: 'ollama' (default) or 'openai'
+                            #   'ollama'  — Ollama /api/generate, port 11434
+                            #   'openai'  — OpenAI-compatible /v1/chat/completions
+                            #             Use for LM Studio, LocalAI, port 8081, etc.
+--groq-rate-limit N         # Max Groq calls/min (default: 100)
+--debug-llm-provider        # auto | groq | local
+--max-iterations N          # Max fix attempts (default: 3)
+--auto-approve              # Skip human review (non-interactive)
+--stage-c                   # Re-run V3 on fixed code after success
+```
+
+**Using the port 8081 OpenAI-compatible server for Stage B:**
+```bash
+python3 unified_pipeline.py --only-stage b \
+  --local-llm-port 8081 --local-llm-format openai \
+  --auto-approve
 ```
 
 ### Testing / Debugging

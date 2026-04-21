@@ -23,6 +23,10 @@ DEFAULT_RAG_INDEX   = DEFAULT_REPORTS_DIR / "rag_index.npz"
 # ── LLM settings ──────────────────────────────────────────────────────────────
 DEFAULT_MODEL       = "Qwen/Qwen2.5-VL-7B-Instruct"
 DEFAULT_PORT        = 8000
+
+# Alternative: OpenAI-compatible local server (e.g. LM Studio, LocalAI, text-gen-webui)
+LOCAL_OPENAI_PORT   = 8081
+LOCAL_OPENAI_MODEL  = "gpt-3.5-turbo"  # model identifier accepted by the server
 LLM_TEMPERATURE     = 0.1
 LLM_MAX_TOKENS      = 1500        # Turn 1 + Turn 2 cover multiple images
 LLM_MAX_TOKENS_REC  = 800         # Recommendations call is text-only, shorter

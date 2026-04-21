@@ -1,0 +1,5 @@
+pipe/data/
+venv/
+pipe/checkpoints
+pipe/logs/
+pipe/reports/

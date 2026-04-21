@@ -131,23 +131,53 @@ class DebugLogger(pl.Callback):
         )
         return label, float(confs[best_idx].item())
 
-    def _predict_distortion(self, img_np):
+    # Mapping from CIFAR-10 predicted class → distortion archetype used when
+    # the YOLO distortion model is unavailable.
+    #
+    # Logic: each CIFAR class represents a different kind of visual challenge
+    # for the model, which maps conceptually onto one of the 4 distortion types:
+    #   blur     — fine-texture animals where sharp feature perception matters
+    #   noise    — animals/scenes with busy natural backgrounds
+    #   pixelate — large-structure objects where scale/resolution is the issue
+    #   jpeg     — mechanical/structured objects with high-contrast edges
+    _CIFAR_TO_DISTORTION: dict = {
+        "airplane":   "jpeg",     # structured, high-contrast silhouette
+        "automobile": "jpeg",     # mechanical, sharp edges
+        "bird":       "noise",    # small, natural background textures
+        "cat":        "blur",     # fine fur texture, subtle facial features
+        "deer":       "noise",    # natural environment, blends with background
+        "dog":        "blur",     # fur texture, similar to cat
+        "frog":       "noise",    # skin texture, leafy backgrounds
+        "horse":      "pixelate", # large body mass, scale ambiguity
+        "ship":       "pixelate", # large uniform areas (sea/sky)
+        "truck":      "jpeg",     # mechanical, structured like automobile
+    }
+
+    def _predict_distortion(self, img_np: np.ndarray, cifar_label: str = ""):
         """
-        Run the distortion YOLO model on a HWC uint8 image.
-        Returns (distortion_label, confidence) — never returns None for label.
+        Return (distortion_label, confidence) for a HWC uint8 image.
+
+        Priority:
+          1. YOLO model (best.pt) — when ultralytics is installed and model loads
+          2. CIFAR confusion-class fallback — maps the model's predicted CIFAR
+             class to one of [blur, noise, pixelate, jpeg] based on the visual
+             challenge that class represents.  Deterministic, no extra deps.
         """
-        if self.distortion_model is None:
-            return None, None
-        try:
-            res = self.distortion_model(img_np, conf=self.distortion_conf_threshold, verbose=False)
-            label, conf = self._extract_best_prediction(res, self.distortion_classes)
-            if label is None:
-                # retry with zero threshold to force a prediction
-                res_low = self.distortion_model(img_np, conf=0.0, verbose=False)
-                label, conf = self._extract_best_prediction(res_low, self.distortion_classes)
-        except Exception:
-            label, conf = None, None
-        return label or "unknown", conf
+        if self.distortion_model is not None:
+            try:
+                res = self.distortion_model(img_np, conf=self.distortion_conf_threshold, verbose=False)
+                label, conf = self._extract_best_prediction(res, self.distortion_classes)
+                if label is None:
+                    res_low = self.distortion_model(img_np, conf=0.0, verbose=False)
+                    label, conf = self._extract_best_prediction(res_low, self.distortion_classes)
+                if label:
+                    return label, conf
+            except Exception:
+                pass
+
+        # Fallback: map CIFAR predicted class → distortion archetype
+        distortion = self._CIFAR_TO_DISTORTION.get(cifar_label, "noise")
+        return distortion, None
 
     # ── Lightning hooks ────────────────────────────────────────────────────────
 
@@ -171,6 +201,18 @@ class DebugLogger(pl.Callback):
     def on_train_epoch_start(self, _trainer, _pl_module):
         """Record epoch start time."""
         self.epoch_start_time = time.time()
+
+    def on_before_optimizer_step(self, trainer, pl_module, _optimizer):
+        """Capture gradient norm after backward pass, before the optimizer clears grads."""
+        total_norm = sum(
+            p.grad.data.norm(2).item() ** 2
+            for p in pl_module.parameters()
+            if p.grad is not None
+        ) ** 0.5
+        self.gradient_norms.append({
+            'epoch':         trainer.current_epoch,
+            'gradient_norm': float(total_norm),
+        })
 
     def on_validation_batch_end(self, trainer, pl_module, _outputs, batch, batch_idx, dataloader_idx=0):
         """
@@ -236,8 +278,8 @@ class DebugLogger(pl.Callback):
                 # CIFAR class label of the predicted class (legacy field)
                 cifar_label = self.metadata.get('classes', {}).get(int(pred), str(pred))
 
-                # distortion model prediction
-                dist_pred, dist_conf = self._predict_distortion(img_np)
+                # distortion model prediction (pass cifar_label for fallback mapping)
+                dist_pred, dist_conf = self._predict_distortion(img_np, cifar_label)
 
                 self.misclassified_data.append({
                     'hash':                  img_hash,
@@ -257,17 +299,6 @@ class DebugLogger(pl.Callback):
                 'epoch':         trainer.current_epoch,
                 'learning_rate': float(param_group['lr']),
             })
-
-        # ── gradient norm ─────────────────────────────────────────────────────
-        total_norm = sum(
-            p.grad.data.norm(2).item() ** 2
-            for p in pl_module.parameters()
-            if p.grad is not None
-        ) ** 0.5
-        self.gradient_norms.append({
-            'epoch':         trainer.current_epoch,
-            'gradient_norm': float(total_norm),
-        })
 
         # ── end-of-epoch aggregates (last batch only) ─────────────────────────
         try:

@@ -403,6 +403,32 @@ The generated `ai_reasoning_summary_v3.md` contains:
 
 ---
 
+## 🤖 LLM Providers
+
+### Stage A (Vision Analysis)
+Uses `ChatOpenAI` (LangChain) pointed at the vLLM server:
+- Default port: **8000** (`DEFAULT_PORT` in `pipe/v3/config.py`)
+- Health check: `/health` (vLLM) **or** `/v1/models` (standard OpenAI-compatible)
+- Pass `--port 8081` to `pipe/test.py` to use the port 8081 server for Stage A
+
+### Stage B (Agentic Debugger)
+`LLMClient` in `agentic_debugger.py` supports three backends:
+
+| Provider | Format | Default Port | Used by Nodes | How to activate |
+|----------|--------|-------------|---------------|-----------------|
+| `LOCAL` (Ollama) | `/api/generate` | 11434 | B2 (analyze_code) | default |
+| `LOCAL_OPENAI` | `/v1/chat/completions` | configurable | B2 when `--local-llm-format openai` | `--local-llm-format openai` |
+| `GROQ` | Groq cloud API | — | B3, B4, B7 | `--groq-api-key KEY` |
+| AUTO | — | — | Prefers GROQ → LOCAL_OPENAI → LOCAL | default priority |
+
+**Use port 8081 OpenAI-compatible server for Stage B:**
+```bash
+python3 unified_pipeline.py --only-stage b \
+  --local-llm-port 8081 --local-llm-format openai
+```
+
+---
+
 ## 🧩 Integration Points
 
 ### Inputs (Data Dependencies)

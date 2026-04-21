@@ -224,6 +224,7 @@ def run_stage_b(
         groq_api_key             = args.groq_api_key,
         groq_rate_limit_per_min  = args.groq_rate_limit,
         preferred_provider       = preferred,
+        local_api_format         = args.local_llm_format,
     )
 
     # B1 — parse report
@@ -718,7 +719,12 @@ Examples:
     )
     grp_dbg.add_argument(
         "--local-llm-port", type=int, default=11434,
-        help="Ollama server port (default: 11434).",
+        help="Local LLM server port (default: 11434).",
+    )
+    grp_dbg.add_argument(
+        "--local-llm-format",
+        choices=["ollama", "openai"], default="ollama",
+        help="API format for the local LLM: 'ollama' (default) or 'openai' (OpenAI-compatible, e.g. port 8081).",
     )
     grp_dbg.add_argument(
         "--groq-rate-limit", type=int, default=100,

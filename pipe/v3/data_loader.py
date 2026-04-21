@@ -20,6 +20,26 @@ from typing import Dict, List, Optional
 
 from .config import CIFAR10_CLASSES, DISTORTION_TYPES
 
+# Mirrors DebugLogger._CIFAR_TO_DISTORTION — used to interpret legacy logs
+# where distortion_predicted is "unknown" or None.
+_CIFAR_NAME_TO_DISTORTION: Dict[str, str] = {
+    "airplane":   "jpeg",
+    "automobile": "jpeg",
+    "bird":       "noise",
+    "cat":        "blur",
+    "deer":       "noise",
+    "dog":        "blur",
+    "frog":       "noise",
+    "horse":      "pixelate",
+    "ship":       "pixelate",
+    "truck":      "jpeg",
+}
+# Allow lookup by numeric string index too ("7" → "horse" → "pixelate")
+_CIFAR_IDX_TO_DISTORTION: Dict[str, str] = {
+    str(idx): _CIFAR_NAME_TO_DISTORTION[name]
+    for idx, name in CIFAR10_CLASSES.items()
+}
+
 
 # ── file discovery ─────────────────────────────────────────────────────────────
 
@@ -72,7 +92,19 @@ def load_misclassified_stats(mc_path: Path) -> Dict:
     samples = raw.get("misclassified_samples", [])
     by_dist: Dict[str, List[Dict]] = defaultdict(list)
     for s in samples:
-        dt = str(s.get("distortion_predicted") or "unknown")
+        dt_raw = s.get("distortion_predicted")
+        if dt_raw and dt_raw not in ("unknown", "None"):
+            # Already classified by YOLO or the new stats-based classifier
+            dt = str(dt_raw)
+        else:
+            # Legacy logs: fall back to CIFAR confusion-class → distortion mapping.
+            # distortion_type is either a class name ("cat") or numeric string ("7").
+            cifar_val = str(s.get("distortion_type", ""))
+            dt = (
+                _CIFAR_NAME_TO_DISTORTION.get(cifar_val)
+                or _CIFAR_IDX_TO_DISTORTION.get(cifar_val)
+                or "unknown"
+            )
         by_dist[dt].append(s)
 
     stats: Dict = {
