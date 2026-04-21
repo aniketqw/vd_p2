@@ -172,12 +172,14 @@ python3 unified_pipeline.py --only-stage b \
 ### V3 Pass-Through Flags (unified_pipeline.py forwards these to Stage A)
 
 ```bash
---no-vlm            # Skip vLLM (stats + RAG only, no GPU)
+--no-vlm            # Skip VLM (stats + RAG only, no server needed)
 --no-rag            # Skip RAG index (faster cold start)
 --rebuild-rag       # Force rebuild RAG even if cached
 --samples N         # Images per distortion type (default: 3)
 --seed N            # Random seed (default: 42)
 --no-tool-trace     # Hide tool verification results from V3 report
+--vlm-port PORT     # Override VLM server port for Stage A (default: 11434 Ollama)
+--vlm-model NAME    # Override VLM model for Stage A (default: llava-llama3)
 ```
 
 ### Stage B / Debugger Flags
@@ -287,17 +289,40 @@ source venv_vision/bin/activate
 # - pytorch-lightning (training orchestration)
 # - langchain, langgraph (agentic loops + chains)
 # - pydantic (structured output validation)
-# - vllm (model server, run separately)
 # - faiss-cpu or faiss-gpu (vector search for RAG)
 # - numpy, scipy (embeddings, similarity)
 ```
 
-### vLLM Server
+### Ollama — M3 Mac (recommended default, Apple Silicon / Metal)
+```bash
+# Install and start (one-time)
+brew install ollama
+ollama serve          # starts on port 11434
+
+# Pull models (~7 GB total, one-time)
+ollama pull llava-llama3   # Stage A: vision analysis  (~5 GB)
+ollama pull llama3.2:3b    # Stage B: code debugging   (~2 GB)
+```
+
+Stage A auto-detects Ollama on port 11434. Fallback chain: **11434 → 8000 (vLLM) → 8081 → skip VLM**.
+
+| Model | Stage | Ollama tag | RAM | Notes |
+|-------|-------|-----------|-----|-------|
+| LLaVA 1.6 | A (vision) | `llava` | ~4.7 GB | Multimodal — understands 32×32 CIFAR images |
+| Qwen 2.5 | B (code) | `qwen2.5` | ~4.7 GB | Strong code + reasoning, great for Stage B |
+
+Override per-run:
+```bash
+python3 unified_pipeline.py --vlm-port 11434 --vlm-model llava          # Ollama (default)
+python3 unified_pipeline.py --vlm-port 8000  --vlm-model Qwen/Qwen2.5-VL-7B-Instruct  # vLLM GPU
+```
+
+### vLLM Server (Linux/CUDA GPU only)
 - Model: `Qwen/Qwen2.5-VL-7B-Instruct` (vision language model)
 - Quantization: `bitsandbytes` (4-bit)
 - GPU memory: 0.4 utilization (adjust if OOM)
 - Context length: 2048 tokens (raise to 4096 if Turn 2 prompt truncates)
-- Port: 8000 (default, customizable via `--port`)
+- Port: 8000 (use `--vlm-port 8000 --vlm-model Qwen/Qwen2.5-VL-7B-Instruct` to activate)
 
 ---
 

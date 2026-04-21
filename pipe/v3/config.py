@@ -21,8 +21,14 @@ DEFAULT_REPORTS_DIR = Path(__file__).resolve().parent.parent / "reports"
 DEFAULT_RAG_INDEX   = DEFAULT_REPORTS_DIR / "rag_index.npz"
 
 # ── LLM settings ──────────────────────────────────────────────────────────────
-DEFAULT_MODEL       = "Qwen/Qwen2.5-VL-7B-Instruct"
-DEFAULT_PORT        = 8000
+# vLLM GPU server (Linux/CUDA — preserved as named constants for override)
+VLLM_PORT  = 8000
+VLLM_MODEL = "Qwen/Qwen2.5-VL-7B-Instruct"
+
+# M3 Mac default: Ollama (Apple Silicon / Metal, port 11434)
+DEFAULT_PORT          = 11434       # Ollama server (was 8000 vLLM)
+DEFAULT_MODEL         = "llava"     # Vision model for Stage A — llava:latest installed
+DEFAULT_STAGE_B_MODEL = "qwen2.5"  # Text/code model for Stage B — qwen2.5:latest installed
 
 # Alternative: OpenAI-compatible local server (e.g. LM Studio, LocalAI, text-gen-webui)
 LOCAL_OPENAI_PORT         = 8081

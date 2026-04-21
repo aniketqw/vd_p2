@@ -69,11 +69,23 @@ The V3 pipeline takes a trained model's failed predictions and generates a compr
 
 #### 1. **config.py** — Configuration & Constants
 ```
-DEFAULT_MODEL = "Qwen/Qwen2.5-VL-7B-Instruct"
-DEFAULT_PORT = 8000
+# M3 Mac defaults (Ollama — models confirmed installed)
+DEFAULT_PORT          = 11434      # Ollama server port
+DEFAULT_MODEL         = "llava"    # Vision model for Stage A (llava:latest)
+DEFAULT_STAGE_B_MODEL = "qwen2.5" # Text/code model for Stage B (qwen2.5:latest)
+
+# vLLM GPU server (named constants for override)
+VLLM_PORT  = 8000
+VLLM_MODEL = "Qwen/Qwen2.5-VL-7B-Instruct"
+
+# Port 8081 OpenAI-compatible fallback
+LOCAL_OPENAI_PORT         = 8081
+LOCAL_OPENAI_MODEL        = "gpt-3.5-turbo"
+LOCAL_OPENAI_MODEL_VISION = "llava"
+
 DEFAULT_LOGS_DIR = "pipe/logs"
 DEFAULT_RAG_INDEX = "pipe/reports/rag_index.npz"
-DISTORTION_TYPES = ["blur", "brightness", "contrast", "fog", "frosted_glass", ...]
+DISTORTION_TYPES = ["blur", "jpeg", "pixelate", "noise"]
 AGENT_MAX_ITERATIONS = 2
 ```
 - All hardcoded paths, model names, thresholds
@@ -405,21 +417,42 @@ The generated `ai_reasoning_summary_v3.md` contains:
 
 ## 🤖 LLM Providers
 
+### M3 Mac Setup (recommended default)
+
+```bash
+brew install ollama && ollama serve
+ollama pull llava-llama3   # Stage A vision model (~5 GB)
+ollama pull llama3.2:3b    # Stage B code model  (~2 GB)
+```
+
+| Model | Stage | RAM | Ollama tag |
+|-------|-------|-----|-----------|
+| LLaVA 1.6 | A — vision analysis | ~4.7 GB | `llava` |
+| Qwen 2.5 | B — code debugging | ~4.7 GB | `qwen2.5` |
+
+Total: ~9.4 GB on a 16 GB M3 Mac (models load on demand, not simultaneously).
+
 ### Stage A (Vision Analysis)
-Uses `ChatOpenAI` (LangChain) pointed at the vLLM server:
-- Default port: **8000** (`DEFAULT_PORT` in `pipe/v3/config.py`)
-- Health check: `/health` (vLLM) **or** `/v1/models` (standard OpenAI-compatible)
-- Pass `--port 8081` to `pipe/test.py` to use the port 8081 server for Stage A
+Uses `ChatOpenAI` (LangChain) via OpenAI-compatible API. Auto-tries three servers in order:
+
+| Priority | Server | Port | Model | Condition |
+|----------|--------|------|-------|-----------|
+| 1st | Ollama (M3 default) | 11434 | `llava-llama3` | always tried first |
+| 2nd | vLLM (GPU server) | 8000 | `Qwen/Qwen2.5-VL-7B-Instruct` | if 11434 not ready |
+| 3rd | Port 8081 (any OpenAI-compat) | 8081 | `llava` | if 8000 not ready |
+| fallback | — | — | — | skip VLM, stats-only |
+
+Override with `--vlm-port` / `--vlm-model` flags.
 
 ### Stage B (Agentic Debugger)
-`LLMClient` in `agentic_debugger.py` supports three backends:
+`LLMClient` in `agentic_debugger.py` supports four backends. AUTO priority: GROQ → LOCAL_OPENAI → LOCAL → port 8081 last-resort.
 
-| Provider | Format | Default Port | Used by Nodes | How to activate |
-|----------|--------|-------------|---------------|-----------------|
-| `LOCAL` (Ollama) | `/api/generate` | 11434 | B2 (analyze_code) | default |
-| `LOCAL_OPENAI` | `/v1/chat/completions` | configurable | B2 when `--local-llm-format openai` | `--local-llm-format openai` |
-| `GROQ` | Groq cloud API | — | B3, B4, B7 | `--groq-api-key KEY` |
-| AUTO | — | — | Prefers GROQ → LOCAL_OPENAI → LOCAL | default priority |
+| Provider | Format | Default Port | Default Model | How to activate |
+|----------|--------|-------------|--------------|-----------------|
+| `LOCAL` (Ollama) | `/api/generate` | 11434 | `llama3.2:3b` | default |
+| `LOCAL_OPENAI` | `/v1/chat/completions` | configurable | `gpt-3.5-turbo` | `--local-llm-format openai` |
+| `GROQ` | Groq cloud API | — | `mixtral-8x7b-32768` | `--groq-api-key KEY` |
+| port 8081 (last resort) | `/v1/chat/completions` | 8081 | `gpt-3.5-turbo` | auto when others unavailable |
 
 **Use port 8081 OpenAI-compatible server for Stage B:**
 ```bash

@@ -35,7 +35,9 @@ class RunConfig(BaseModel):
     no_vlm: bool            # True/False
     stage_c: bool           # True/False
     user_code: str = ""     # Optional custom model code
-    local_llm_format: str = "ollama"  # "ollama" | "openai"
+    local_llm_format: str = "ollama"      # "ollama" | "openai"
+    vlm_port:  str = "11434"   # VLM server port for Stage A
+    vlm_model: str = "llava"  # VLM model for Stage A
 
 @app.get("/", response_class=HTMLResponse)
 async def get_index():
@@ -87,6 +89,11 @@ async def run_pipeline(config: RunConfig):
 
     if config.local_llm_format and config.local_llm_format in ("ollama", "openai"):
         cmd.extend(["--local-llm-format", config.local_llm_format])
+
+    if config.vlm_port and config.vlm_port.strip().isdigit():
+        cmd.extend(["--vlm-port", config.vlm_port.strip()])
+    if config.vlm_model and config.vlm_model.strip():
+        cmd.extend(["--vlm-model", config.vlm_model.strip()])
 
     env = os.environ.copy()
     env["PYTHONUNBUFFERED"] = "1"  # propagate unbuffered mode to all child processes

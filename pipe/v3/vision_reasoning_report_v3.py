@@ -66,6 +66,7 @@ from v3.config import (
     DEFAULT_LOGS_DIR, DEFAULT_REPORTS_DIR, DEFAULT_RAG_INDEX,
     DEFAULT_MODEL, DEFAULT_PORT, DISTORTION_TYPES,
     LOCAL_OPENAI_PORT, LOCAL_OPENAI_MODEL_VISION,
+    VLLM_PORT, VLLM_MODEL,
 )
 from v3.data_loader import (
     find_latest_file,
@@ -183,12 +184,23 @@ def main():
     llm   = None
     graph = None
     if not args.no_vlm:
-        active_port  = args.port
-        active_model = args.model
+        active_port  = args.port   # default: 11434 (Ollama)
+        active_model = args.model  # default: llava-llama3
 
+        # 1st try: configured port (Ollama 11434 by default)
         ready = wait_for_server(active_port, timeout=15, poll_interval=3)
+
+        # 2nd try: vLLM port 8000 (GPU server)
+        if not ready and active_port != VLLM_PORT:
+            print(f"⚠️  Port {active_port} not ready — trying vLLM port {VLLM_PORT}…")
+            ready = wait_for_server(VLLM_PORT, timeout=15, poll_interval=3)
+            if ready:
+                active_port  = VLLM_PORT
+                active_model = VLLM_MODEL
+
+        # 3rd try: port 8081 OpenAI-compatible server (llava)
         if not ready and active_port != LOCAL_OPENAI_PORT:
-            print(f"⚠️  Port {active_port} not ready — trying fallback port {LOCAL_OPENAI_PORT} (llava)…")
+            print(f"⚠️  Port {VLLM_PORT} not ready — trying fallback port {LOCAL_OPENAI_PORT} (llava)…")
             ready = wait_for_server(LOCAL_OPENAI_PORT, timeout=10, poll_interval=2)
             if ready:
                 active_port  = LOCAL_OPENAI_PORT

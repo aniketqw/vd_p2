@@ -165,6 +165,10 @@ def run_stage_a(args: argparse.Namespace, output_report: Path) -> Path:
     # Forward V3 pass-through flags
     if args.no_vlm:
         cmd.append("--no-vlm")
+    if args.vlm_port:
+        cmd += ["--vlm-port", str(args.vlm_port)]
+    if args.vlm_model:
+        cmd += ["--vlm-model", args.vlm_model]
     # test.py does not accept --no-rag directly; the v3 report script does.
     # We handle extra v3 flags by delegating them through test.py extra args:
     # test.py will forward them to vision_reasoning_report_v3.py automatically
@@ -710,6 +714,10 @@ Examples:
                         help="Random seed (default: 42).")
     grp_v3.add_argument("--no-tool-trace", action="store_true",
                         help="Hide tool verification results from V3 report.")
+    grp_v3.add_argument("--vlm-port",  type=int, default=None,
+                        help="Override VLM server port for Stage A (default: 11434 Ollama).")
+    grp_v3.add_argument("--vlm-model", type=str, default=None,
+                        help="Override VLM model for Stage A (default: llava-llama3).")
 
     # ── Debug / Stage B flags ─────────────────────────────────────────────────
     grp_dbg = p.add_argument_group("Stage B — Agentic debugger flags")

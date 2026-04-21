@@ -127,7 +127,7 @@ def _run(cmd: list, step: str):
         sys.exit(result.returncode)
 
 
-def run_pipeline(version: str, no_vlm: bool):
+def run_pipeline(version: str, no_vlm: bool, vlm_port: int = None, vlm_model: str = None):
     """Steps 2-4: export → cluster → AI report, using the latest training log."""
 
     logs_dir    = _PIPE_DIR / "logs"
@@ -160,9 +160,13 @@ def run_pipeline(version: str, no_vlm: bool):
     )
 
     # ── Step 4: AI reasoning report ───────────────────────────────────────────
-    script      = _REPORT_SCRIPTS[version]
+    script       = _REPORT_SCRIPTS[version]
     project_root = _PIPE_DIR.parent
     extra = ["--no-vlm"] if no_vlm else []
+    if vlm_port:
+        extra += ["--port", str(vlm_port)]
+    if vlm_model:
+        extra += ["--model", vlm_model]
     _run(
         [sys.executable, str(script),
          "--logs-dir", str(logs_dir),
@@ -196,6 +200,14 @@ Examples:
         "--no-vlm", action="store_true",
         help="Pass --no-vlm to the report script (stats-only, no GPU/server needed). "
              "Only relevant when --version is set.",
+    )
+    parser.add_argument(
+        "--vlm-port", type=int, default=None,
+        help="Override VLM server port for Stage A (default: 11434 Ollama).",
+    )
+    parser.add_argument(
+        "--vlm-model", type=str, default=None,
+        help="Override VLM model name for Stage A (default: llava-llama3).",
     )
     args = parser.parse_args()
 
@@ -242,7 +254,8 @@ Examples:
         return
 
     # ── Steps 2-4: pipeline ───────────────────────────────────────────────────
-    run_pipeline(args.version, args.no_vlm)
+    run_pipeline(args.version, args.no_vlm,
+                 vlm_port=args.vlm_port, vlm_model=args.vlm_model)
 
     print("\n" + "="*70)
     print("✅ Full pipeline complete!")

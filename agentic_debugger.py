@@ -246,7 +246,7 @@ class LLMClient:
         if p == LLMProvider.LOCAL_OPENAI:
             return self._call_openai_local(prompt, model or "gpt-3.5-turbo")
         elif p == LLMProvider.LOCAL:
-            return self._call_ollama(prompt, model or "mistral")
+            return self._call_ollama(prompt, model or "llama3.2:3b")
         elif p == LLMProvider.GROQ:
             return self._call_groq(prompt, model or "mixtral-8x7b-32768")
         else:
