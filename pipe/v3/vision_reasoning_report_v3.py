@@ -65,6 +65,7 @@ from logger_setup import logger
 from v3.config import (
     DEFAULT_LOGS_DIR, DEFAULT_REPORTS_DIR, DEFAULT_RAG_INDEX,
     DEFAULT_MODEL, DEFAULT_PORT, DISTORTION_TYPES,
+    LOCAL_OPENAI_PORT, LOCAL_OPENAI_MODEL_VISION,
 )
 from v3.data_loader import (
     find_latest_file,
@@ -182,12 +183,22 @@ def main():
     llm   = None
     graph = None
     if not args.no_vlm:
-        ready = wait_for_server(args.port, timeout=300, poll_interval=5)
+        active_port  = args.port
+        active_model = args.model
+
+        ready = wait_for_server(active_port, timeout=15, poll_interval=3)
+        if not ready and active_port != LOCAL_OPENAI_PORT:
+            print(f"⚠️  Port {active_port} not ready — trying fallback port {LOCAL_OPENAI_PORT} (llava)…")
+            ready = wait_for_server(LOCAL_OPENAI_PORT, timeout=10, poll_interval=2)
+            if ready:
+                active_port  = LOCAL_OPENAI_PORT
+                active_model = LOCAL_OPENAI_MODEL_VISION
+
         if not ready:
             print("⚠️  Continuing without VLM — analyses will be skipped.\n")
         else:
-            logger.info(f"Building LLM → http://localhost:{args.port}/v1")
-            llm   = build_llm(args.model, args.port)
+            logger.info(f"Building LLM → http://localhost:{active_port}/v1  model={active_model}")
+            llm   = build_llm(active_model, active_port)
             graph = build_graph(llm, rag_store, mc_stats)
             print("✅ Agent graph compiled (observe→hypothesise→verify→conclude)\n")
 

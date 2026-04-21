@@ -195,8 +195,17 @@ class LLMClient:
         """Check if Groq API is configured."""
         return bool(self.groq_api_key) and REQUESTS_AVAILABLE
 
+    def _check_port(self, port: int) -> bool:
+        """Quick liveness check for any OpenAI-compatible server."""
+        import urllib.request as _ur
+        try:
+            with _ur.urlopen(f"http://localhost:{port}/v1/models", timeout=3) as r:
+                return r.status == 200
+        except Exception:
+            return False
+
     def _get_best_provider(self) -> LLMProvider:
-        """Select best available provider. Priority: GROQ → LOCAL_OPENAI → LOCAL."""
+        """Select best available provider. Priority: GROQ → LOCAL_OPENAI → LOCAL → port 8081."""
         if self.preferred_provider != LLMProvider.AUTO:
             return self.preferred_provider
 
@@ -206,7 +215,14 @@ class LLMClient:
             return LLMProvider.LOCAL_OPENAI
         if self.is_local_available():
             return LLMProvider.LOCAL
-        raise RuntimeError("No LLM provider available (Ollama not running, Groq not configured)")
+        # Last resort: try port 8081 unconditionally regardless of local_api_format
+        if self.local_port != 8081 and self._check_port(8081):
+            print("⚠️  Falling back to port 8081 (OpenAI-compatible server)")
+            self.local_port = 8081
+            return LLMProvider.LOCAL_OPENAI
+        raise RuntimeError(
+            "No LLM provider available (Groq unavailable, Ollama not running, port 8081 unreachable)"
+        )
 
     def _groq_rate_available(self) -> bool:
         """Check if Groq rate limit allows another request."""
@@ -747,7 +763,7 @@ def escalate_or_fallback(comparison: ComparisonResult, iteration: int) -> DebugR
         executive_summary=f"""
 Original accuracy: {comparison.baseline.best_accuracy:.2%}
 After attempt: {comparison.after_fix.best_accuracy:.2%}
-Improvement: {comparison.improvements['accuracy_change']:+.2%}
+Improvement: {comparison.improvements.get('accuracy_change', 0.0):+.2%}
 Status: {status}
 """,
         root_cause_analysis="Root cause diagnosis inconclusive. Further manual investigation recommended.",
