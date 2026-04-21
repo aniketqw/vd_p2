@@ -1,0 +1,928 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vision Pipeline v5 — AI Model Optimizer</title>
+    <meta name="description" content="Paste your PyTorch model code and let AI analyze, improve, and benchmark it automatically.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        /* ═══════════════════════════════════════════════════════════════════
+           DESIGN SYSTEM
+           ═══════════════════════════════════════════════════════════════════ */
+        :root {
+            --bg-primary: #07080f;
+            --bg-secondary: #0d0f1a;
+            --bg-card: rgba(15, 17, 30, 0.7);
+            --bg-card-hover: rgba(20, 22, 38, 0.8);
+            --bg-input: rgba(10, 12, 22, 0.9);
+            --border-subtle: rgba(99, 102, 241, 0.15);
+            --border-glow: rgba(99, 102, 241, 0.4);
+
+            --accent: #818cf8;
+            --accent-bright: #a5b4fc;
+            --accent-dim: #4f46e5;
+            --success: #34d399;
+            --success-dim: #059669;
+            --warning: #fbbf24;
+            --error: #f87171;
+            --error-dim: #ef4444;
+
+            --text-primary: #f1f5f9;
+            --text-secondary: #94a3b8;
+            --text-dim: #64748b;
+
+            --gradient-hero: linear-gradient(135deg, #4f46e5 0%, #7c3aed 50%, #ec4899 100%);
+            --gradient-card: linear-gradient(145deg, rgba(99,102,241,0.05) 0%, rgba(124,58,237,0.03) 100%);
+            --gradient-glow: radial-gradient(600px at var(--mx, 50%) var(--my, 50%),
+                             rgba(99,102,241,0.06) 0%, transparent 70%);
+
+            --shadow-lg: 0 20px 60px -12px rgba(0, 0, 0, 0.5);
+            --shadow-glow: 0 0 30px rgba(99, 102, 241, 0.1);
+
+            --radius: 16px;
+            --radius-sm: 10px;
+            --transition: 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+
+            --font: 'Inter', system-ui, -apple-system, sans-serif;
+            --mono: 'JetBrains Mono', 'Fira Code', monospace;
+        }
+
+        /* ═══ RESET ═══ */
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+        html { scroll-behavior: smooth; }
+        body {
+            font-family: var(--font);
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+            line-height: 1.6;
+            overflow-x: hidden;
+        }
+
+        /* ═══ BACKGROUND ═══ */
+        body::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            background:
+                radial-gradient(ellipse 80% 60% at 20% 10%, rgba(79, 70, 229, 0.08) 0%, transparent 60%),
+                radial-gradient(ellipse 60% 50% at 80% 80%, rgba(124, 58, 237, 0.06) 0%, transparent 60%),
+                radial-gradient(ellipse 50% 40% at 50% 50%, rgba(236, 72, 153, 0.03) 0%, transparent 60%);
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        /* ═══ LAYOUT ═══ */
+        .container {
+            max-width: 1280px;
+            margin: 0 auto;
+            padding: 0 24px;
+            position: relative;
+            z-index: 1;
+        }
+
+        /* ═══ HEADER ═══ */
+        header {
+            padding: 40px 0 20px;
+            text-align: center;
+        }
+        .logo-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 16px;
+            background: rgba(99, 102, 241, 0.1);
+            border: 1px solid var(--border-subtle);
+            border-radius: 999px;
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--accent-bright);
+            margin-bottom: 16px;
+            letter-spacing: 0.5px;
+        }
+        .logo-badge .dot {
+            width: 6px; height: 6px;
+            background: var(--success);
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.5; transform: scale(0.8); }
+        }
+        h1 {
+            font-size: clamp(28px, 4vw, 44px);
+            font-weight: 800;
+            background: var(--gradient-hero);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            line-height: 1.15;
+            margin-bottom: 8px;
+        }
+        .subtitle {
+            font-size: 16px;
+            color: var(--text-secondary);
+            max-width: 560px;
+            margin: 0 auto;
+        }
+
+        /* ═══ CARD ═══ */
+        .card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius);
+            backdrop-filter: blur(20px);
+            box-shadow: var(--shadow-lg);
+            padding: 28px;
+            transition: border-color var(--transition), box-shadow var(--transition);
+            position: relative;
+            overflow: hidden;
+        }
+        .card::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: var(--gradient-glow);
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.5s;
+        }
+        .card:hover::before { opacity: 1; }
+        .card:hover { border-color: var(--border-glow); }
+        .card-title {
+            font-size: 15px;
+            font-weight: 600;
+            color: var(--accent-bright);
+            text-transform: uppercase;
+            letter-spacing: 1.2px;
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .card-title .icon { font-size: 18px; }
+
+        /* ═══ EDITOR ═══ */
+        .editor-wrap {
+            position: relative;
+            margin-top: 24px;
+        }
+        #code-editor {
+            width: 100%;
+            min-height: 320px;
+            max-height: 500px;
+            background: var(--bg-input);
+            color: var(--text-primary);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-sm);
+            padding: 20px;
+            font-family: var(--mono);
+            font-size: 13px;
+            line-height: 1.65;
+            resize: vertical;
+            outline: none;
+            transition: border-color var(--transition);
+            tab-size: 4;
+        }
+        #code-editor:focus { border-color: var(--accent); box-shadow: var(--shadow-glow); }
+        #code-editor::placeholder { color: var(--text-dim); }
+
+        .editor-actions {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            margin-top: 12px;
+            flex-wrap: wrap;
+        }
+        .editor-info {
+            margin-left: auto;
+            font-size: 12px;
+            color: var(--text-dim);
+        }
+
+        /* ═══ BUTTONS ═══ */
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 11px 24px;
+            border: none;
+            border-radius: var(--radius-sm);
+            font-family: var(--font);
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all var(--transition);
+            position: relative;
+            overflow: hidden;
+        }
+        .btn::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(rgba(255,255,255,0.1), transparent);
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
+        .btn:hover::after { opacity: 1; }
+        .btn:active { transform: scale(0.97); }
+        .btn:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+            transform: none;
+        }
+        .btn-primary {
+            background: var(--gradient-hero);
+            color: white;
+            box-shadow: 0 4px 20px rgba(79, 70, 229, 0.3);
+        }
+        .btn-primary:hover { box-shadow: 0 6px 30px rgba(79, 70, 229, 0.5); transform: translateY(-1px); }
+        .btn-secondary {
+            background: rgba(99, 102, 241, 0.1);
+            color: var(--accent-bright);
+            border: 1px solid var(--border-subtle);
+        }
+        .btn-secondary:hover { background: rgba(99, 102, 241, 0.2); border-color: var(--border-glow); }
+        .btn-sm { padding: 7px 14px; font-size: 12px; }
+
+        .btn .spinner {
+            width: 16px; height: 16px;
+            border: 2px solid rgba(255,255,255,0.3);
+            border-top-color: white;
+            border-radius: 50%;
+            animation: spin 0.6s linear infinite;
+            display: none;
+        }
+        .btn.loading .spinner { display: block; }
+        .btn.loading .btn-text { opacity: 0.6; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* ═══ PROGRESS ═══ */
+        .progress-section {
+            margin-top: 24px;
+            display: none;
+        }
+        .progress-section.active { display: block; }
+        .progress-bar-track {
+            height: 4px;
+            background: rgba(99, 102, 241, 0.1);
+            border-radius: 99px;
+            overflow: hidden;
+            margin-bottom: 12px;
+        }
+        .progress-bar-fill {
+            height: 100%;
+            background: var(--gradient-hero);
+            border-radius: 99px;
+            transition: width 0.5s ease;
+            width: 0%;
+        }
+        .progress-status {
+            font-size: 13px;
+            color: var(--text-secondary);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .progress-status .dot {
+            width: 6px; height: 6px;
+            background: var(--accent);
+            border-radius: 50%;
+            animation: pulse 1s infinite;
+        }
+
+        /* ═══ RESULTS ═══ */
+        .results-section {
+            margin-top: 32px;
+            display: none;
+        }
+        .results-section.active { display: block; }
+
+        .results-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 24px;
+        }
+        @media (max-width: 768px) { .results-grid { grid-template-columns: 1fr; } }
+
+        .metric-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-sm);
+            padding: 20px;
+            text-align: center;
+            transition: all var(--transition);
+        }
+        .metric-card:hover { border-color: var(--border-glow); }
+        .metric-card .label {
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--text-dim);
+            margin-bottom: 8px;
+        }
+        .metric-card .value {
+            font-size: 32px;
+            font-weight: 800;
+            background: var(--gradient-hero);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        .metric-card .delta {
+            display: inline-block;
+            margin-top: 6px;
+            padding: 3px 10px;
+            border-radius: 99px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        .delta.positive { background: rgba(52, 211, 153, 0.1); color: var(--success); }
+        .delta.negative { background: rgba(248, 113, 113, 0.1); color: var(--error); }
+
+        /* ═══ TABS ═══ */
+        .tabs {
+            display: flex;
+            gap: 2px;
+            background: rgba(99, 102, 241, 0.05);
+            border-radius: var(--radius-sm);
+            padding: 3px;
+            margin-bottom: 16px;
+        }
+        .tab {
+            flex: 1;
+            padding: 10px 16px;
+            border: none;
+            background: transparent;
+            color: var(--text-secondary);
+            font-family: var(--font);
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            border-radius: 8px;
+            transition: all var(--transition);
+        }
+        .tab:hover { color: var(--text-primary); }
+        .tab.active {
+            background: rgba(99, 102, 241, 0.15);
+            color: var(--accent-bright);
+        }
+
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+
+        /* ═══ CODE OUTPUT ═══ */
+        .code-output {
+            background: var(--bg-input);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-sm);
+            padding: 20px;
+            font-family: var(--mono);
+            font-size: 13px;
+            line-height: 1.65;
+            color: var(--text-primary);
+            overflow-x: auto;
+            white-space: pre-wrap;
+            word-break: break-word;
+            max-height: 500px;
+            overflow-y: auto;
+            position: relative;
+        }
+        .code-output .copy-btn {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            padding: 5px 12px;
+            background: rgba(99, 102, 241, 0.2);
+            border: 1px solid var(--border-subtle);
+            border-radius: 6px;
+            color: var(--accent-bright);
+            font-size: 11px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .code-output .copy-btn:hover { background: rgba(99, 102, 241, 0.4); }
+
+        /* ═══ ANALYSIS ═══ */
+        .analysis-text {
+            background: var(--bg-input);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-sm);
+            padding: 20px;
+            font-size: 14px;
+            line-height: 1.8;
+            color: var(--text-secondary);
+            max-height: 400px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+        }
+        .analysis-text strong { color: var(--accent-bright); }
+
+        /* ═══ STATUS BANNER ═══ */
+        .status-banner {
+            padding: 14px 20px;
+            border-radius: var(--radius-sm);
+            font-size: 14px;
+            font-weight: 500;
+            display: none;
+            align-items: center;
+            gap: 10px;
+            margin-top: 16px;
+            animation: slideIn 0.3s ease;
+        }
+        @keyframes slideIn { from { opacity: 0; transform: translateY(-8px); } }
+        .status-banner.active { display: flex; }
+        .status-banner.error { background: rgba(248, 113, 113, 0.1); border: 1px solid rgba(248,113,113,0.2); color: var(--error); }
+        .status-banner.success { background: rgba(52, 211, 153, 0.1); border: 1px solid rgba(52,211,153,0.2); color: var(--success); }
+        .status-banner.info { background: rgba(99, 102, 241, 0.1); border: 1px solid rgba(99,102,241,0.2); color: var(--accent-bright); }
+
+        /* ═══ MODE TOGGLE ═══ */
+        .mode-toggle {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+        .mode-btn {
+            flex: 1;
+            min-width: 200px;
+            padding: 16px 20px;
+            background: var(--bg-card);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            transition: all var(--transition);
+            text-align: left;
+        }
+        .mode-btn:hover { border-color: var(--border-glow); }
+        .mode-btn.selected {
+            border-color: var(--accent);
+            background: rgba(99, 102, 241, 0.08);
+        }
+        .mode-btn .mode-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 4px;
+        }
+        .mode-btn .mode-desc {
+            font-size: 12px;
+            color: var(--text-dim);
+        }
+        .mode-btn .mode-time {
+            display: inline-block;
+            margin-top: 6px;
+            padding: 2px 8px;
+            background: rgba(99,102,241,0.1);
+            border-radius: 99px;
+            font-size: 11px;
+            color: var(--accent);
+        }
+
+        /* ═══ EPOCHS INPUT ═══ */
+        .epoch-input {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-top: 12px;
+        }
+        .epoch-input label {
+            font-size: 13px;
+            color: var(--text-secondary);
+        }
+        .epoch-input input {
+            width: 70px;
+            padding: 7px 12px;
+            background: var(--bg-input);
+            border: 1px solid var(--border-subtle);
+            border-radius: 8px;
+            color: var(--text-primary);
+            font-family: var(--mono);
+            font-size: 13px;
+            outline: none;
+        }
+        .epoch-input input:focus { border-color: var(--accent); }
+
+        /* ═══ FOOTER ═══ */
+        footer {
+            text-align: center;
+            padding: 40px 0;
+            font-size: 12px;
+            color: var(--text-dim);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- HEADER -->
+        <header>
+            <div class="logo-badge"><span class="dot"></span> VISION PIPELINE v5</div>
+            <h1>AI Model Optimizer</h1>
+            <p class="subtitle">Paste your PyTorch model code. AI will analyze it, find weaknesses, generate an improved version, train both, and show you the results.</p>
+        </header>
+
+        <!-- MODE SELECTION -->
+        <div class="mode-toggle" id="mode-toggle">
+            <div class="mode-btn selected" data-mode="quick" onclick="selectMode('quick')">
+                <div class="mode-title">⚡ Quick Analyze</div>
+                <div class="mode-desc">LLM reviews your code and generates improvements. No training needed.</div>
+                <span class="mode-time">~30 seconds</span>
+            </div>
+            <div class="mode-btn" data-mode="full" onclick="selectMode('full')">
+                <div class="mode-title">🔬 Train &amp; Compare</div>
+                <div class="mode-desc">Trains both models on CIFAR-10, analyzes real failures, and compares results.</div>
+                <span class="mode-time">~10-30 minutes</span>
+            </div>
+        </div>
+
+        <!-- EPOCHS (for full mode) -->
+        <div class="epoch-input" id="epoch-input" style="display:none;">
+            <label for="epochs">Training epochs:</label>
+            <input type="number" id="epochs" value="3" min="1" max="50">
+        </div>
+
+        <!-- CODE EDITOR -->
+        <div class="card editor-wrap">
+            <div class="card-title"><span class="icon">📝</span> Your Model Code</div>
+            <textarea id="code-editor" placeholder="Paste your PyTorch Lightning model class here...&#10;&#10;class MyModel(pl.LightningModule):&#10;    ..."></textarea>
+            <div class="editor-actions">
+                <button class="btn btn-primary" id="run-btn" onclick="runPipeline()">
+                    <span class="spinner"></span>
+                    <span class="btn-text">⚡ Analyze &amp; Improve</span>
+                </button>
+                <button class="btn btn-secondary btn-sm" onclick="loadDefault()">Load Default SimpleCNN</button>
+                <button class="btn btn-secondary btn-sm" onclick="clearEditor()">Clear</button>
+                <span class="editor-info" id="line-count">0 lines</span>
+            </div>
+        </div>
+
+        <!-- PROGRESS -->
+        <div class="progress-section" id="progress-section">
+            <div class="card">
+                <div class="progress-bar-track">
+                    <div class="progress-bar-fill" id="progress-bar"></div>
+                </div>
+                <div class="progress-status">
+                    <span class="dot"></span>
+                    <span id="progress-text">Starting...</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- STATUS BANNER -->
+        <div class="status-banner" id="status-banner"></div>
+
+        <!-- RESULTS -->
+        <div class="results-section" id="results-section">
+            <!-- Comparison Metrics (full mode only) -->
+            <div class="results-grid" id="comparison-grid" style="display:none;">
+                <div class="metric-card">
+                    <div class="label">Original Accuracy</div>
+                    <div class="value" id="orig-acc">—</div>
+                </div>
+                <div class="metric-card">
+                    <div class="label">Improved Accuracy</div>
+                    <div class="value" id="imp-acc">—</div>
+                    <div class="delta positive" id="acc-delta"></div>
+                </div>
+                <div class="metric-card">
+                    <div class="label">Original Misclassified</div>
+                    <div class="value" id="orig-mc">—</div>
+                </div>
+                <div class="metric-card">
+                    <div class="label">Improved Misclassified</div>
+                    <div class="value" id="imp-mc">—</div>
+                    <div class="delta positive" id="mc-delta"></div>
+                </div>
+            </div>
+
+            <!-- Tabs: Analysis / Improved Code -->
+            <div class="card">
+                <div class="tabs" id="result-tabs">
+                    <button class="tab active" onclick="showTab('analysis')">🔍 Analysis</button>
+                    <button class="tab" onclick="showTab('improved')">🛠️ Improved Code</button>
+                </div>
+                <div class="tab-content active" id="tab-analysis">
+                    <div class="analysis-text" id="analysis-output">Waiting for results...</div>
+                </div>
+                <div class="tab-content" id="tab-improved">
+                    <div class="code-output" id="improved-output">
+                        <button class="copy-btn" onclick="copyCode()">📋 Copy</button>
+                        <code id="improved-code-text"></code>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <footer>Vision Pipeline v5 — Combines v3 failure analysis + v4 code correction into an end-to-end agent</footer>
+    </div>
+
+    <script>
+    /* ═══════════════════════════════════════════════════════════════════
+       STATE
+       ═══════════════════════════════════════════════════════════════════ */
+    let currentMode = 'quick';
+    let isRunning = false;
+
+    /* ═══ ELEMENTS ═══ */
+    const editor      = document.getElementById('code-editor');
+    const runBtn      = document.getElementById('run-btn');
+    const btnText     = runBtn.querySelector('.btn-text');
+    const progressSec = document.getElementById('progress-section');
+    const progressBar = document.getElementById('progress-bar');
+    const progressTxt = document.getElementById('progress-text');
+    const resultsSec  = document.getElementById('results-section');
+    const statusBanner= document.getElementById('status-banner');
+    const lineCount   = document.getElementById('line-count');
+    const epochInput  = document.getElementById('epoch-input');
+    const compGrid    = document.getElementById('comparison-grid');
+
+    /* ═══ MODE SELECTION ═══ */
+    function selectMode(mode) {
+        currentMode = mode;
+        document.querySelectorAll('.mode-btn').forEach(b => {
+            b.classList.toggle('selected', b.dataset.mode === mode);
+        });
+        epochInput.style.display = mode === 'full' ? 'flex' : 'none';
+        btnText.textContent = mode === 'quick' ? '⚡ Analyze & Improve' : '🔬 Train & Compare';
+    }
+
+    /* ═══ EDITOR ═══ */
+    editor.addEventListener('input', () => {
+        const lines = editor.value.split('\n').length;
+        lineCount.textContent = `${lines} line${lines !== 1 ? 's' : ''}`;
+    });
+
+    editor.addEventListener('keydown', (e) => {
+        if (e.key === 'Tab') {
+            e.preventDefault();
+            const start = editor.selectionStart;
+            const end = editor.selectionEnd;
+            editor.value = editor.value.substring(0, start) + '    ' + editor.value.substring(end);
+            editor.selectionStart = editor.selectionEnd = start + 4;
+        }
+    });
+
+    async function loadDefault() {
+        try {
+            const res = await fetch('/api/default-code');
+            const data = await res.json();
+            editor.value = data.code;
+            editor.dispatchEvent(new Event('input'));
+        } catch {
+            editor.value = `class SimpleCNN(pl.LightningModule):
+    def __init__(self):
+        super().__init__()
+        self.conv1 = torch.nn.Conv2d(3, 32, 3, padding=1)
+        self.pool = torch.nn.MaxPool2d(2)
+        self.fc1 = torch.nn.Linear(32 * 16 * 16, 10)
+
+    def forward(self, x):
+        x = self.pool(F.relu(self.conv1(x)))
+        return self.fc1(x.view(x.size(0), -1))
+
+    def configure_optimizers(self):
+        return torch.optim.Adam(self.parameters(), lr=0.001)
+
+    def training_step(self, batch, _):
+        x, y = batch
+        self.log("train_loss", F.cross_entropy(self(x), y))
+        return F.cross_entropy(self(x), y)
+
+    def validation_step(self, batch, _):
+        x, y = batch; logits = self(x)
+        self.log("val_loss", F.cross_entropy(logits, y))
+        self.log("accuracy", (logits.argmax(1) == y).float().mean())`;
+            editor.dispatchEvent(new Event('input'));
+        }
+    }
+
+    function clearEditor() {
+        editor.value = '';
+        editor.dispatchEvent(new Event('input'));
+        hideResults();
+    }
+
+    /* ═══ STATUS ═══ */
+    function showStatus(msg, type) {
+        statusBanner.className = `status-banner active ${type}`;
+        statusBanner.innerHTML = `${type === 'error' ? '❌' : type === 'success' ? '✅' : 'ℹ️'} ${msg}`;
+    }
+
+    function showProgress(msg, pct) {
+        progressSec.classList.add('active');
+        progressTxt.textContent = msg;
+        progressBar.style.width = `${pct}%`;
+    }
+
+    function hideProgress() {
+        progressSec.classList.remove('active');
+        progressBar.style.width = '0%';
+    }
+
+    function hideResults() {
+        resultsSec.classList.remove('active');
+        compGrid.style.display = 'none';
+        statusBanner.classList.remove('active');
+    }
+
+    /* ═══ TABS ═══ */
+    function showTab(name) {
+        document.querySelectorAll('.tab').forEach((t, i) => {
+            t.classList.toggle('active', (name === 'analysis' && i === 0) || (name === 'improved' && i === 1));
+        });
+        document.getElementById('tab-analysis').classList.toggle('active', name === 'analysis');
+        document.getElementById('tab-improved').classList.toggle('active', name === 'improved');
+    }
+
+    function copyCode() {
+        const code = document.getElementById('improved-code-text').textContent;
+        navigator.clipboard.writeText(code).then(() => {
+            const btn = document.querySelector('.copy-btn');
+            btn.textContent = '✅ Copied!';
+            setTimeout(() => btn.textContent = '📋 Copy', 2000);
+        });
+    }
+
+    /* ═══ FORMATTING ═══ */
+    function formatAnalysis(text) {
+        return text
+            .replace(/ISSUE\s*(\d)/g, '<strong>📌 ISSUE $1</strong>')
+            .replace(/PROBLEM:/g, '<strong>Problem:</strong>')
+            .replace(/IMPACT:/g, '<strong>Impact:</strong>')
+            .replace(/FIX:/g, '<strong>Fix:</strong>')
+            .replace(/CAUSES?:/g, '<strong>Causes:</strong>');
+    }
+
+    function formatAccuracy(val) {
+        if (typeof val === 'number') {
+            return val < 1 ? (val * 100).toFixed(1) + '%' : val.toFixed(1) + '%';
+        }
+        return String(val);
+    }
+
+    /* ═══ DISPLAY RESULTS ═══ */
+    function displayResults(data) {
+        resultsSec.classList.add('active');
+
+        // Analysis
+        const analysisEl = document.getElementById('analysis-output');
+        analysisEl.innerHTML = formatAnalysis(data.analysis || 'No analysis available.');
+
+        // Improved code
+        document.getElementById('improved-code-text').textContent = data.improved_code || 'No code generated.';
+
+        // Comparison metrics (full mode)
+        if (data.comparison) {
+            compGrid.style.display = 'grid';
+            const c = data.comparison;
+
+            document.getElementById('orig-acc').textContent = formatAccuracy(c.original_accuracy);
+            document.getElementById('imp-acc').textContent = formatAccuracy(c.improved_accuracy);
+
+            const accDelta = document.getElementById('acc-delta');
+            const deltaVal = c.accuracy_delta || 0;
+            accDelta.textContent = (deltaVal >= 0 ? '+' : '') + deltaVal.toFixed(1) + ' pp';
+            accDelta.className = `delta ${deltaVal >= 0 ? 'positive' : 'negative'}`;
+
+            document.getElementById('orig-mc').textContent = c.original_misclassified?.toLocaleString() || '—';
+            document.getElementById('imp-mc').textContent = c.improved_misclassified?.toLocaleString() || '—';
+
+            const mcDelta = document.getElementById('mc-delta');
+            const mcReduction = c.misclassified_reduction || 0;
+            mcDelta.textContent = (mcReduction >= 0 ? '-' : '+') + Math.abs(mcReduction).toLocaleString();
+            mcDelta.className = `delta ${mcReduction >= 0 ? 'positive' : 'negative'}`;
+        }
+
+        showTab('analysis');
+    }
+
+    /* ═══ PIPELINE EXECUTION ═══ */
+    async function runPipeline() {
+        const code = editor.value.trim();
+        if (!code) {
+            showStatus('Please paste your model code first.', 'error');
+            return;
+        }
+        if (isRunning) return;
+
+        isRunning = true;
+        runBtn.classList.add('loading');
+        runBtn.disabled = true;
+        hideResults();
+        statusBanner.classList.remove('active');
+
+        const endpoint = currentMode === 'quick' ? '/api/analyze' : '/api/run';
+        const body = { code };
+        if (currentMode === 'full') {
+            body.epochs = parseInt(document.getElementById('epochs').value) || 3;
+        }
+
+        try {
+            if (currentMode === 'quick') {
+                showProgress('LLM analyzing your model code...', 30);
+
+                const res = await fetch(endpoint, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body),
+                });
+
+                showProgress('Processing results...', 80);
+
+                if (!res.ok) {
+                    const err = await res.json().catch(() => ({ error: 'Server error' }));
+                    throw new Error(err.error || `HTTP ${res.status}`);
+                }
+
+                const data = await res.json();
+                showProgress('Done!', 100);
+                setTimeout(hideProgress, 600);
+
+                displayResults(data);
+                showStatus(
+                    data.used_fallback
+                        ? 'Analysis complete (used fallback model — LLM code generation was retried 3x).'
+                        : 'Analysis complete! Review the issues and improved code below.',
+                    'success'
+                );
+
+            } else {
+                // Full pipeline
+                showProgress('Starting full pipeline...', 5);
+
+                const res = await fetch(endpoint, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body),
+                });
+
+                if (!res.ok) {
+                    const err = await res.json().catch(() => ({ error: 'Server error' }));
+                    throw new Error(err.error || `HTTP ${res.status}`);
+                }
+
+                const data = await res.json();
+
+                // Update progress for each step received
+                const steps = ['Training original...', 'Collecting stats...',
+                               'LLM analyzing...', 'Generating fix...', 
+                               'Training improved...', 'Comparing...', 'Done!'];
+                let pct = 100;
+                showProgress('Pipeline complete!', pct);
+                setTimeout(hideProgress, 600);
+
+                if (data.error) {
+                    showStatus(data.error, 'error');
+                    if (data.analysis) displayResults(data);
+                } else {
+                    displayResults(data);
+                    const delta = data.comparison?.accuracy_delta;
+                    showStatus(
+                        `Pipeline complete! Accuracy ${delta >= 0 ? 'improved' : 'changed'} by ${delta >= 0 ? '+' : ''}${(delta || 0).toFixed(1)} percentage points.`,
+                        delta >= 0 ? 'success' : 'info'
+                    );
+                }
+            }
+        } catch (error) {
+            hideProgress();
+            showStatus(error.message, 'error');
+        } finally {
+            isRunning = false;
+            runBtn.classList.remove('loading');
+            runBtn.disabled = false;
+        }
+    }
+
+    /* ═══ GLOW EFFECT ═══ */
+    document.addEventListener('mousemove', (e) => {
+        document.querySelectorAll('.card').forEach(card => {
+            const rect = card.getBoundingClientRect();
+            card.style.setProperty('--mx', ((e.clientX - rect.left) / rect.width * 100) + '%');
+            card.style.setProperty('--my', ((e.clientY - rect.top) / rect.height * 100) + '%');
+        });
+    });
+
+    /* ═══ HEALTH CHECK ═══ */
+    async function checkHealth() {
+        try {
+            const res = await fetch('/api/health');
+            const data = await res.json();
+            if (!data.llm_available) {
+                showStatus(`LLM server not detected on port ${data.llm_port}. Start your vLLM server first.`, 'info');
+            }
+        } catch {
+            // Server itself is down — nothing to show
+        }
+    }
+
+    /* ═══ INIT ═══ */
+    checkHealth();
+    loadDefault();
+    </script>
+</body>
+</html>
